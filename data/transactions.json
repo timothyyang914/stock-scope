@@ -1,0 +1,26 @@
+[
+  {
+    "id": "tx-1771739782559",
+    "date": "2026-02-05T11:56:00.000Z",
+    "type": "BUY",
+    "symbol": "LITX",
+    "name": "LITE 2x",
+    "shares": 260,
+    "price": 53.24,
+    "amount": 13842.4,
+    "fees": 0,
+    "status": "COMPLETED"
+  },
+  {
+    "id": "tx-1771964479124",
+    "date": "0005-02-01T07:21:36.000Z",
+    "type": "BUY",
+    "symbol": "AAPL",
+    "name": "Apple Inc.",
+    "shares": 100,
+    "price": 180,
+    "amount": 18000,
+    "fees": 0,
+    "status": "COMPLETED"
+  }
+]
