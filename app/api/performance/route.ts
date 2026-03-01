@@ -111,8 +111,10 @@ export async function GET(req: any) {
                 }
             });
 
-            // Normalize weights if some data is missing
-            if (totalWeight > 0) portfolioReturn = portfolioReturn / totalWeight;
+            // Note: We do NOT divide by totalWeight here. 
+            // Since hq.weight is (marketValue / totalAccountValue), 
+            // the sum naturally accounts for the "cash drag" (0% return on cash),
+            // which makes these monthly bars consistent with the YTD/Total return figures.
 
             monthlyReturns.push({
                 month: monthLabel,
