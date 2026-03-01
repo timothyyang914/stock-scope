@@ -78,8 +78,8 @@ export default function Home() {
   const handleSearch = useCallback(
     (ticker: string) => {
       setCurrentTicker(ticker);
-      setCurrentRange("1M");
-      fetchData(ticker, "1M");
+      setCurrentRange("1D");
+      fetchData(ticker, "1D");
     },
     [fetchData]
   );
