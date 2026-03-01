@@ -8,6 +8,8 @@ export const metadata: Metadata = {
     "Enter any stock ticker to view live price charts, key metrics, and the latest news.",
 };
 
+import Navbar from "@/components/Navbar";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -38,53 +40,9 @@ export default function RootLayout({
                 StockScope
               </span>
             </div>
-            <nav className="hidden md:flex items-center gap-6 text-sm text-text-muted">
-              <Link
-                href="/"
-                className="hover:text-text-primary cursor-pointer transition-colors focus:outline-none"
-              >
-                Dashboard
-              </Link>
-              <Link
-                href="/portfolio"
-                className="hover:text-text-primary cursor-pointer transition-colors focus:outline-none"
-              >
-                Portfolio
-              </Link>
-              <Link
-                href="/performance"
-                className="hover:text-text-primary cursor-pointer transition-colors focus:outline-none"
-              >
-                Performance
-              </Link>
-              <Link
-                href="/risk"
-                className="hover:text-text-primary cursor-pointer transition-colors focus:outline-none"
-              >
-                Risk
-              </Link>
-              <Link
-                href="/transactions"
-                className="hover:text-text-primary cursor-pointer transition-colors focus:outline-none"
-              >
-                Transactions
-              </Link>
-              <Link
-                href="/markets"
-                className="hover:text-text-primary cursor-pointer transition-colors focus:outline-none"
-              >
-                Markets
-              </Link>
-              <Link
-                href="/watchlist"
-                className="hover:text-text-primary cursor-pointer transition-colors focus:outline-none"
-              >
-                Watchlist
-              </Link>
-              <span className="hover:text-text-primary cursor-pointer transition-colors text-text-faint pointer-events-none">
-                Reports
-              </span>
-            </nav>
+
+            <Navbar />
+
             <div className="w-9 h-9 rounded-full bg-surface-2 border border-border flex items-center justify-center text-sm font-semibold text-text-muted">
               JD
             </div>
