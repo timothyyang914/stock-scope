@@ -89,13 +89,24 @@ export async function GET(req: any) {
             let totalWeight = 0;
 
             holdingsQuotes.forEach(hq => {
-                const hCurr = hq.quotes.find(q => new Date(q.date).getMonth() === date.getMonth() && new Date(q.date).getFullYear() === date.getFullYear());
-                const hPrev = hq.quotes[hq.quotes.indexOf(hCurr!) - 1];
+                const targetMonth = date.getMonth();
+                const targetYear = date.getFullYear();
 
-                if (hCurr?.adjclose && hPrev?.adjclose) {
-                    const hReturn = ((hCurr.adjclose - hPrev.adjclose) / hPrev.adjclose) * 100;
-                    portfolioReturn += hReturn * hq.weight;
-                    totalWeight += hq.weight;
+                const hCurr = hq.quotes.find(q => {
+                    const qDate = new Date(q.date);
+                    return qDate.getMonth() === targetMonth && qDate.getFullYear() === targetYear;
+                });
+
+                if (hCurr?.adjclose) {
+                    // Find the immediately preceding month's quote for this holding
+                    const currIndex = hq.quotes.indexOf(hCurr);
+                    const hPrev = currIndex > 0 ? hq.quotes[currIndex - 1] : null;
+
+                    if (hPrev?.adjclose) {
+                        const hReturn = ((hCurr.adjclose - hPrev.adjclose) / hPrev.adjclose) * 100;
+                        portfolioReturn += hReturn * hq.weight;
+                        totalWeight += hq.weight;
+                    }
                 }
             });
 
