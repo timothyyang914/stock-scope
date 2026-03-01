@@ -1,11 +1,4 @@
-import fs from "fs";
-import path from "path";
-
-const DATA_PATH = path.join(process.cwd(), "data", "transactions.json");
-const SETTINGS_PATH = path.join(process.cwd(), "data", "portfolio_settings.json");
-const WATCHLIST_PATH = path.join(process.cwd(), "data", "watchlist.json");
-
-const DEFAULT_CASH = 12500.50;
+import { supabase } from "./supabase";
 
 export interface Transaction {
     id: string;
@@ -33,206 +26,182 @@ export interface WatchlistItem {
     name: string;
 }
 
-export function getTransactions(): Transaction[] {
-    try {
-        if (!fs.existsSync(DATA_PATH)) {
-            return [];
-        }
-        const data = fs.readFileSync(DATA_PATH, "utf8");
-        return JSON.parse(data);
-    } catch (error) {
-        console.error("Error reading transactions:", error);
-        return [];
-    }
-}
-
-export function saveTransactions(transactions: Transaction[]) {
-    try {
-        fs.writeFileSync(DATA_PATH, JSON.stringify(transactions, null, 2), "utf8");
-    } catch (error) {
-        console.error("Error saving transactions:", error);
-    }
-}
-
-export function updateTransaction(updatedTx: Transaction) {
-    const transactions = getTransactions();
-    const index = transactions.findIndex((tx) => tx.id === updatedTx.id);
-    if (index !== -1) {
-        transactions[index] = updatedTx;
-        saveTransactions(transactions);
-    }
-}
-
 export interface Watchlist {
     id: string;
     name: string;
     items: WatchlistItem[];
 }
 
-export function getWatchlists(): Watchlist[] {
-    try {
-        if (!fs.existsSync(WATCHLIST_PATH)) {
-            const initialWatchlists: Watchlist[] = [
-                {
-                    id: "default",
-                    name: "Main Watchlist",
-                    items: [
-                        { symbol: "AAPL", name: "Apple Inc." },
-                        { symbol: "MSFT", name: "Microsoft Corp" },
-                        { symbol: "GOOGL", name: "Alphabet Inc" },
-                        { symbol: "AMZN", name: "Amazon.com Inc" },
-                    ]
-                },
-                {
-                    id: "growth",
-                    name: "High Growth",
-                    items: [
-                        { symbol: "NVDA", name: "NVIDIA Corp" },
-                        { symbol: "TSLA", name: "Tesla Inc." },
-                        { symbol: "SMCI", name: "Super Micro" },
-                        { symbol: "PLTR", name: "Palantir Tech" },
-                    ]
-                }
-            ];
-            saveWatchlists(initialWatchlists);
-            return initialWatchlists;
-        }
-        const rawData = fs.readFileSync(WATCHLIST_PATH, "utf8");
-        const data = JSON.parse(rawData);
+const DEFAULT_CASH = 12500.50;
 
-        // Migration: If data is an array of items (old format), wrap it in a default watchlist
-        if (Array.isArray(data) && data.length > 0 && "symbol" in data[0]) {
-            const migrated: Watchlist[] = [
-                {
-                    id: "default",
-                    name: "Main Watchlist",
-                    items: data as unknown as WatchlistItem[]
-                }
-            ];
-            saveWatchlists(migrated);
-            return migrated;
-        }
+// Transactions
+export async function getTransactions(): Promise<Transaction[]> {
+    const { data, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .order('date', { ascending: false });
 
-        return data;
-    } catch (error) {
-        console.error("Error reading watchlists:", error);
+    if (error) {
+        console.error("Error fetching transactions:", error);
         return [];
     }
+    return data || [];
 }
 
-export function saveWatchlists(watchlists: Watchlist[]) {
-    try {
-        fs.writeFileSync(WATCHLIST_PATH, JSON.stringify(watchlists, null, 2), "utf8");
-    } catch (error) {
-        console.error("Error saving watchlists:", error);
-    }
+export async function addTransaction(newTx: Transaction) {
+    const { error } = await supabase
+        .from('transactions')
+        .insert([newTx]);
+
+    if (error) console.error("Error adding transaction:", error);
 }
 
-export function getWatchlist(id: string = "default"): WatchlistItem[] {
-    const watchlists = getWatchlists();
-    const list = watchlists.find((l) => l.id === id) || watchlists[0];
-    return list ? list.items : [];
+export async function updateTransaction(updatedTx: Transaction) {
+    const { error } = await supabase
+        .from('transactions')
+        .update(updatedTx)
+        .eq('id', updatedTx.id);
+
+    if (error) console.error("Error updating transaction:", error);
 }
 
-export function deleteFromWatchlist(symbol: string, listId: string = "default") {
-    const watchlists = getWatchlists();
-    const listIndex = watchlists.findIndex((l) => l.id === listId);
-    if (listIndex !== -1) {
-        watchlists[listIndex].items = watchlists[listIndex].items.filter((item) => item.symbol !== symbol);
-        saveWatchlists(watchlists);
-    }
+export async function deleteTransaction(id: string) {
+    const { error } = await supabase
+        .from('transactions')
+        .delete()
+        .eq('id', id);
+
+    if (error) console.error("Error deleting transaction:", error);
 }
 
-export function addToWatchlist(symbol: string, listId: string = "default", name: string = "") {
-    const watchlists = getWatchlists();
-    const listIndex = watchlists.findIndex((l) => l.id === listId);
-    if (listIndex !== -1) {
-        // Check if already exists
-        if (!watchlists[listIndex].items.some((item) => item.symbol === symbol)) {
-            watchlists[listIndex].items.push({ symbol, name });
-            saveWatchlists(watchlists);
+// Cash Balance (Settings)
+export async function getCashBalance(): Promise<number> {
+    const { data, error } = await supabase
+        .from('settings')
+        .select('value')
+        .eq('id', 'portfolio')
+        .single();
+
+    if (error) {
+        if (error.code !== 'PGRST116') { // Not found
+            console.error("Error fetching cash balance:", error);
         }
-    }
-}
-
-export function deleteWatchlist(id: string) {
-    let watchlists = getWatchlists();
-    watchlists = watchlists.filter((l) => l.id !== id);
-
-    // Ensure at least one watchlist exists
-    if (watchlists.length === 0) {
-        watchlists.push({
-            id: "default",
-            name: "Main Watchlist",
-            items: []
-        });
-    }
-
-    saveWatchlists(watchlists);
-}
-
-export function renameWatchlist(id: string, newName: string) {
-    const watchlists = getWatchlists();
-    const list = watchlists.find((l) => l.id === id);
-    if (list) {
-        list.name = newName;
-        saveWatchlists(watchlists);
-    }
-}
-
-export function createWatchlist(name: string): Watchlist {
-    const watchlists = getWatchlists();
-    const newId = name.toLowerCase().replace(/\s+/g, "-") + "-" + Date.now();
-    const newList: Watchlist = {
-        id: newId,
-        name,
-        items: []
-    };
-    watchlists.push(newList);
-    saveWatchlists(watchlists);
-    return newList;
-}
-
-export function addTransaction(newTx: Transaction) {
-    const transactions = getTransactions();
-    transactions.push(newTx);
-    saveTransactions(transactions);
-}
-
-export function deleteTransaction(id: string) {
-    const transactions = getTransactions();
-    const filtered = transactions.filter((tx) => tx.id !== id);
-    saveTransactions(filtered);
-}
-
-export function getCashBalance(): number {
-    try {
-        if (!fs.existsSync(SETTINGS_PATH)) {
-            return DEFAULT_CASH;
-        }
-        const data = fs.readFileSync(SETTINGS_PATH, "utf8");
-        const settings = JSON.parse(data);
-        return settings.cashBalance ?? DEFAULT_CASH;
-    } catch (error) {
-        console.error("Error reading cash balance:", error);
         return DEFAULT_CASH;
     }
+    return data?.value?.cashBalance ?? DEFAULT_CASH;
 }
 
-export function saveCashBalance(balance: number) {
-    try {
-        const settings = fs.existsSync(SETTINGS_PATH)
-            ? JSON.parse(fs.readFileSync(SETTINGS_PATH, "utf8"))
-            : {};
-        settings.cashBalance = balance;
-        fs.writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2), "utf8");
-    } catch (error) {
-        console.error("Error saving cash balance:", error);
+export async function saveCashBalance(balance: number) {
+    const { error } = await supabase
+        .from('settings')
+        .upsert({ id: 'portfolio', value: { cashBalance: balance } });
+
+    if (error) console.error("Error saving cash balance:", error);
+}
+
+// Watchlists
+export async function getWatchlists(): Promise<Watchlist[]> {
+    const { data: watchlists, error: wlError } = await supabase
+        .from('watchlists')
+        .select('*');
+
+    if (wlError) {
+        console.error("Error fetching watchlists:", wlError);
+        return [];
+    }
+
+    const { data: items, error: iError } = await supabase
+        .from('watchlist_items')
+        .select('*');
+
+    if (iError) {
+        console.error("Error fetching watchlist items:", iError);
+        return [];
+    }
+
+    return watchlists.map(wl => ({
+        ...wl,
+        items: items.filter(i => i.watchlist_id === wl.id).map(i => ({ symbol: i.symbol, name: i.name }))
+    }));
+}
+
+export async function saveWatchlists(watchlists: Watchlist[]) {
+    // This is more complex because of the relational structure.
+    // For simplicity in this migration, we'll focus on the core functionality.
+    // In a real app, you'd update specific watchlists.
+    for (const wl of watchlists) {
+        await supabase.from('watchlists').upsert({ id: wl.id, name: wl.name });
+        // Clear and re-insert items for simplicity (not efficient but works for small lists)
+        await supabase.from('watchlist_items').delete().eq('watchlist_id', wl.id);
+        const items = wl.items.map(i => ({ watchlist_id: wl.id, symbol: i.symbol, name: i.name }));
+        if (items.length > 0) {
+            await supabase.from('watchlist_items').insert(items);
+        }
     }
 }
 
-export function getHoldings(): Holding[] {
-    const transactions = getTransactions().filter((tx) => tx.status === "COMPLETED");
+export async function getWatchlist(id: string = "default"): Promise<WatchlistItem[]> {
+    const { data, error } = await supabase
+        .from('watchlist_items')
+        .select('symbol, name')
+        .eq('watchlist_id', id);
+
+    if (error) {
+        console.error("Error fetching watchlist:", error);
+        return [];
+    }
+    return data || [];
+}
+
+export async function deleteFromWatchlist(symbol: string, listId: string = "default") {
+    const { error } = await supabase
+        .from('watchlist_items')
+        .delete()
+        .eq('watchlist_id', listId)
+        .eq('symbol', symbol);
+
+    if (error) console.error("Error deleting from watchlist:", error);
+}
+
+export async function addToWatchlist(symbol: string, listId: string = "default", name: string = "") {
+    const { error } = await supabase
+        .from('watchlist_items')
+        .insert([{ watchlist_id: listId, symbol, name }]);
+
+    if (error) console.error("Error adding to watchlist:", error);
+}
+
+export async function deleteWatchlist(id: string) {
+    const { error } = await supabase
+        .from('watchlists')
+        .delete()
+        .eq('id', id);
+
+    if (error) console.error("Error deleting watchlist:", error);
+}
+
+export async function renameWatchlist(id: string, newName: string) {
+    const { error } = await supabase
+        .from('watchlists')
+        .update({ name: newName })
+        .eq('id', id);
+
+    if (error) console.error("Error renaming watchlist:", error);
+}
+
+export async function createWatchlist(name: string): Promise<Watchlist> {
+    const id = name.toLowerCase().replace(/\s+/g, "-") + "-" + Date.now();
+    const { error } = await supabase
+        .from('watchlists')
+        .insert([{ id, name }]);
+
+    if (error) console.error("Error creating watchlist:", error);
+    return { id, name, items: [] };
+}
+
+// Holdings Logic (Deriving from Transactions)
+export async function getHoldings(): Promise<Holding[]> {
+    const transactions = (await getTransactions()).filter((tx) => tx.status === "COMPLETED");
     const holdingsMap: Record<string, { totalShares: number; totalCost: number; name: string }> = {};
 
     transactions.forEach((tx) => {
@@ -244,10 +213,8 @@ export function getHoldings(): Holding[] {
             holdingsMap[tx.symbol].totalShares += tx.shares;
             holdingsMap[tx.symbol].totalCost += tx.amount;
         } else {
-            // For SELL, we reduce shares but keep cost basis calculation (simplified FIFO or average cost fallback)
             holdingsMap[tx.symbol].totalShares -= tx.shares;
-            // Note: In a real system, selling doesn't reduce "Average Cost" but reduces total position.
-            // For simplicity, we just reduce total cost proportionally to maintain the same average cost.
+            // Simplified cost basis reduction
         }
     });
 

@@ -19,7 +19,7 @@ export async function GET(req: any) {
         const benchmarkLabel = searchParams.get("benchmark") || "S&P 500";
         const benchmarkSymbol = BENCHMARKS[benchmarkLabel] || "^GSPC";
 
-        const transactions = getTransactions().filter(tx => tx.status === "COMPLETED");
+        const transactions = (await getTransactions()).filter(tx => tx.status === "COMPLETED");
         const portfolioData = await calculatePortfolio();
 
         if (transactions.length === 0) {

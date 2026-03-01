@@ -6,7 +6,7 @@ const yahooFinance = new YahooFinance();
 
 export async function GET() {
     try {
-        const holdings = getHoldings();
+        const holdings = await getHoldings();
         if (holdings.length === 0) {
             return NextResponse.json({
                 summary: { sharpe: 0, drawdown: 0, beta: 0, var: 0 },

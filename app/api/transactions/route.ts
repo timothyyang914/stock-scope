@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getTransactions, updateTransaction, addTransaction, deleteTransaction } from "@/lib/dataStore";
 
 export async function GET() {
-    const transactions = getTransactions();
+    const transactions = await getTransactions();
 
     const summary = {
         totalBought: transactions
@@ -25,7 +25,7 @@ export async function GET() {
 export async function PUT(req: NextRequest) {
     try {
         const updatedTx = await req.json();
-        updateTransaction(updatedTx);
+        await updateTransaction(updatedTx);
         return NextResponse.json({ success: true, transaction: updatedTx });
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 });
@@ -35,7 +35,7 @@ export async function PUT(req: NextRequest) {
 export async function POST(req: NextRequest) {
     try {
         const newTx = await req.json();
-        addTransaction(newTx);
+        await addTransaction(newTx);
         return NextResponse.json({ success: true, transaction: newTx });
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 });
@@ -47,7 +47,7 @@ export async function DELETE(req: NextRequest) {
         const { searchParams } = new URL(req.url);
         const id = searchParams.get("id");
         if (!id) throw new Error("Missing transaction id");
-        deleteTransaction(id);
+        await deleteTransaction(id);
         return NextResponse.json({ success: true });
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 });

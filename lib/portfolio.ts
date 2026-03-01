@@ -35,8 +35,8 @@ const SECTORS: Record<string, string> = {
 // CASH_BALANCE is now fetched dynamically from dataStore
 
 export async function calculatePortfolio() {
-    const holdings = getHoldings();
-    const CASH_BALANCE = getCashBalance();
+    const holdings = await getHoldings();
+    const CASH_BALANCE = await getCashBalance();
 
     if (holdings.length === 0) {
         return {

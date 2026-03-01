@@ -7,7 +7,7 @@ const yahooFinance = new YahooFinance();
 export async function GET(req: NextRequest) {
     try {
         const listId = req.nextUrl.searchParams.get("id") || "default";
-        const allWatchlists: Watchlist[] = getWatchlists();
+        const allWatchlists: Watchlist[] = await getWatchlists();
         const activeWatchlist: Watchlist = allWatchlists.find(l => l.id === listId) || allWatchlists[0];
 
         const symbols = activeWatchlist.items.map((w: WatchlistItem) => w.symbol);
@@ -20,13 +20,10 @@ export async function GET(req: NextRequest) {
             });
         }
 
-        // 1. Fetch real-time quotes for all symbols in watchlist
+        // ... rest of GET remains same (fetch quotes, etc.)
         const quotes = await yahooFinance.quote(symbols);
-
-        // 2. Fetch intraday 15m charts for each symbol for the mini sparklines
         const now = new Date();
-        const oneDayAgo = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000); // 2 days to account for weekends
-
+        const oneDayAgo = new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000);
         const charts = await Promise.all(
             symbols.map((symbol) =>
                 yahooFinance
@@ -38,7 +35,6 @@ export async function GET(req: NextRequest) {
             )
         );
 
-        // 3. Process the data row by row
         let totalChangePercent = 0;
         let topGainer = { symbol: "", changePercent: -Infinity };
         let topLoser = { symbol: "", changePercent: Infinity };
@@ -49,45 +45,27 @@ export async function GET(req: NextRequest) {
             let sparkline: number[] = [];
             let previousClose = quote.regularMarketPreviousClose || 0;
 
-            // Extract valid close prices for the sparkline trend
             if (chartData && chartData.quotes && chartData.quotes.length > 0) {
-                let validQuotes = chartData.quotes.filter(
-                    (q: any) => q.close !== null && q.close !== undefined
-                );
-
+                let validQuotes = chartData.quotes.filter((q: any) => q.close !== null && q.close !== undefined);
                 if (validQuotes.length > 0) {
-                    const lastDateStr = new Date(
-                        validQuotes[validQuotes.length - 1].date
-                    ).toDateString();
-                    validQuotes = validQuotes.filter(
-                        (q: any) => new Date(q.date).toDateString() === lastDateStr
-                    );
+                    const lastDateStr = new Date(validQuotes[validQuotes.length - 1].date).toDateString();
+                    validQuotes = validQuotes.filter((q: any) => new Date(q.date).toDateString() === lastDateStr);
                     sparkline = validQuotes.map((q: any) => q.close as number);
                 }
             }
 
-            // Fallback synthetic sparkline if API chart fails
             if (sparkline.length === 0) {
                 let p = quote.regularMarketPrice || 100;
-                sparkline = Array.from(
-                    { length: 20 },
-                    () => (p *= 1 + (Math.random() - 0.5) * 0.005)
-                );
+                sparkline = Array.from({ length: 20 }, () => (p *= 1 + (Math.random() - 0.5) * 0.005));
             }
 
             const price = quote.regularMarketPrice || sparkline[sparkline.length - 1];
             const change = quote.regularMarketChange || price - previousClose;
-            const changePercent =
-                quote.regularMarketChangePercent || previousClose !== 0 ? (change / previousClose) * 100 : 0;
+            const changePercent = quote.regularMarketChangePercent || previousClose !== 0 ? (change / previousClose) * 100 : 0;
 
-            // Track aggregates for summary
             totalChangePercent += changePercent;
-            if (changePercent > topGainer.changePercent) {
-                topGainer = { symbol: asset.symbol, changePercent };
-            }
-            if (changePercent < topLoser.changePercent) {
-                topLoser = { symbol: asset.symbol, changePercent };
-            }
+            if (changePercent > topGainer.changePercent) topGainer = { symbol: asset.symbol, changePercent };
+            if (changePercent < topLoser.changePercent) topLoser = { symbol: asset.symbol, changePercent };
 
             return {
                 symbol: asset.symbol,
@@ -121,76 +99,46 @@ export async function GET(req: NextRequest) {
         });
     } catch (e: any) {
         console.error("Watchlist API Error:", e.message);
-        return NextResponse.json(
-            { error: "Failed to fetch watchlist data: " + e.message },
-            { status: 500 }
-        );
+        return NextResponse.json({ error: "Failed to fetch watchlist data: " + e.message }, { status: 500 });
     }
 }
 
 export async function POST(req: NextRequest) {
     try {
         const { name } = await req.json();
-        if (!name) {
-            return NextResponse.json({ error: "name is required" }, { status: 400 });
-        }
-
-        const newList = createWatchlist(name);
+        if (!name) return NextResponse.json({ error: "name is required" }, { status: 400 });
+        const newList = await createWatchlist(name);
         return NextResponse.json({ success: true, list: newList });
     } catch (e: any) {
-        console.error("Watchlist POST Error:", e.message);
-        return NextResponse.json(
-            { error: "Failed to create watchlist: " + e.message },
-            { status: 500 }
-        );
+        return NextResponse.json({ error: "Failed to create watchlist: " + e.message }, { status: 500 });
     }
 }
 
 export async function PUT(req: NextRequest) {
     try {
         const { ticker, listId } = await req.json();
-        if (!ticker) {
-            return NextResponse.json({ error: "ticker is required" }, { status: 400 });
-        }
-
+        if (!ticker) return NextResponse.json({ error: "ticker is required" }, { status: 400 });
         const id = listId || "default";
-
-        // Fetch ticker name first for a better UX
         let name = ticker;
         try {
             const quote: any = await yahooFinance.quote(ticker);
             name = quote.shortName || quote.longName || ticker;
-        } catch (e) {
-            console.warn(`Could not fetch name for ${ticker}, using symbol.`);
-        }
-
-        addToWatchlist(ticker.toUpperCase(), id, name);
-
+        } catch (e) { }
+        await addToWatchlist(ticker.toUpperCase(), id, name);
         return NextResponse.json({ success: true, ticker });
     } catch (e: any) {
-        console.error("Watchlist PUT Error:", e.message);
-        return NextResponse.json(
-            { error: "Failed to add to watchlist: " + e.message },
-            { status: 500 }
-        );
+        return NextResponse.json({ error: "Failed to add to watchlist: " + e.message }, { status: 500 });
     }
 }
 
 export async function PATCH(req: NextRequest) {
     try {
         const { id, newName } = await req.json();
-        if (!id || !newName) {
-            return NextResponse.json({ error: "id and newName are required" }, { status: 400 });
-        }
-
-        renameWatchlist(id, newName);
+        if (!id || !newName) return NextResponse.json({ error: "id and newName are required" }, { status: 400 });
+        await renameWatchlist(id, newName);
         return NextResponse.json({ success: true, id, newName });
     } catch (e: any) {
-        console.error("Watchlist PATCH Error:", e.message);
-        return NextResponse.json(
-            { error: "Failed to rename: " + e.message },
-            { status: 500 }
-        );
+        return NextResponse.json({ error: "Failed to rename: " + e.message }, { status: 500 });
     }
 }
 
@@ -198,21 +146,14 @@ export async function DELETE(req: NextRequest) {
     try {
         const ticker = req.nextUrl.searchParams.get("ticker");
         const listId = req.nextUrl.searchParams.get("id") || "default";
-
         if (ticker) {
-            // Delete single asset
-            deleteFromWatchlist(ticker.toUpperCase(), listId);
+            await deleteFromWatchlist(ticker.toUpperCase(), listId);
             return NextResponse.json({ success: true, ticker });
         } else {
-            // Delete entire watchlist
-            deleteWatchlist(listId);
+            await deleteWatchlist(listId);
             return NextResponse.json({ success: true, listId });
         }
     } catch (e: any) {
-        console.error("Watchlist DELETE Error:", e.message);
-        return NextResponse.json(
-            { error: "Failed to delete: " + e.message },
-            { status: 500 }
-        );
+        return NextResponse.json({ error: "Failed to delete: " + e.message }, { status: 500 });
     }
 }
