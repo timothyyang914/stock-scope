@@ -59,14 +59,15 @@ export async function GET(req: any) {
         // Fetch historical data for all current holdings to estimate monthly returns
         const holdingsQuotes = await Promise.all(
             portfolioData.holdings.map(async (h: any) => {
+                const weight = h.marketValue / portfolioData.summary.totalValue;
                 try {
                     const history = await yahooFinance.chart(h.symbol, {
                         period1: Math.floor(sixMonthsAgo.getTime() / 1000),
                         interval: "1mo",
                     });
-                    return { symbol: h.symbol, weight: h.allocation / 100, quotes: history.quotes || [] };
+                    return { symbol: h.symbol, weight, quotes: history.quotes || [] };
                 } catch (e) {
-                    return { symbol: h.symbol, weight: h.allocation / 100, quotes: [] };
+                    return { symbol: h.symbol, weight, quotes: [] };
                 }
             })
         );
