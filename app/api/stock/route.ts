@@ -87,39 +87,50 @@ export async function GET(req: NextRequest) {
 
             // Note: We will filter to the visible range AFTER SMA calculation
         }
-        // Use Alpha Vantage for 1M+ (DAILY is free)
+        // Use Alpha Vantage for 1M+ (DAILY is free) if key is available
         else {
-            if (!apiKey || apiKey === "your_alpha_vantage_key_here") {
-                throw new Error("Alpha Vantage API key is missing");
+            let success = false;
+
+            if (apiKey && apiKey !== "your_alpha_vantage_key_here") {
+                try {
+                    const dailyRes = await fetch(`https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${ticker}&outputsize=full&apikey=${apiKey}`);
+                    const dailyData = await dailyRes.json();
+                    const timeSeriesData = dailyData["Time Series (Daily)"];
+
+                    if (timeSeriesData) {
+                        processedPoints = Object.entries(timeSeriesData).map(([date, values]: [string, any]) => ({
+                            date,
+                            open: parseFloat(values["1. open"]),
+                            high: parseFloat(values["2. high"]),
+                            low: parseFloat(values["3. low"]),
+                            close: parseFloat(values["4. close"]),
+                            volume: parseInt(values["5. volume"]),
+                        })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                        success = true;
+                    }
+                } catch (e) {
+                    console.warn("Alpha Vantage Daily failed, falling back to Yahoo Finance:", e);
+                }
             }
 
-            const dailyRes = await fetch(`https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${ticker}&outputsize=full&apikey=${apiKey}`);
-            const dailyData = await dailyRes.json();
-            const timeSeriesData = dailyData["Time Series (Daily)"];
+            if (!success) {
+                // Primary fallback: Yahoo Finance
+                const chartRes = await yahooFinance.chart(ticker, {
+                    interval: "1d",
+                    period1: new Date(new Date().getTime() - 2 * 365 * 24 * 60 * 60 * 1000) // 2 year buffer
+                });
 
-            if (!timeSeriesData) {
-                // Fallback to Yahoo Finance if Alpha Vantage fails
-                console.warn("Alpha Vantage Daily failed, falling back to Yahoo Finance");
-                const chartRes = await yahooFinance.chart(ticker, { interval: "1d", period1: new Date(new Date().getTime() - 365 * 24 * 60 * 60 * 1000) });
-                processedPoints = (chartRes?.quotes || []).filter(q => q.close !== null).map(q => ({
-                    date: new Date(q.date).toISOString().split("T")[0],
-                    open: q.open || q.close,
-                    high: q.high || q.close,
-                    low: q.low || q.close,
-                    close: q.close,
-                    volume: q.volume || 0
-                }));
-            } else {
-                processedPoints = Object.entries(timeSeriesData).map(([date, values]: [string, any]) => ({
-                    date,
-                    open: parseFloat(values["1. open"]),
-                    high: parseFloat(values["2. high"]),
-                    low: parseFloat(values["3. low"]),
-                    close: parseFloat(values["4. close"]),
-                    volume: parseInt(values["5. volume"]),
-                })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                processedPoints = (chartRes?.quotes || [])
+                    .filter(q => q.close !== null && q.close !== undefined)
+                    .map(q => ({
+                        date: new Date(q.date).toISOString().split("T")[0],
+                        open: q.open || q.close,
+                        high: q.high || q.close,
+                        low: q.low || q.close,
+                        close: q.close,
+                        volume: q.volume || 0
+                    }));
             }
-            // Note: We will filter to the visible range AFTER SMA calculation
         }
 
         // 3. Calculate SMAs on the FULL buffered data
