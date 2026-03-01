@@ -46,7 +46,7 @@ export async function GET(req: any) {
         // 2. Calculate Monthly Returns (Portfolio vs Benchmark)
         const now = new Date();
         const sixMonthsAgo = new Date();
-        sixMonthsAgo.setMonth(now.getMonth() - 6);
+        sixMonthsAgo.setMonth(now.getMonth() - 7); // Fetch 7 months to get 6 discrete monthly changes
 
         // Fetch historical data for benchmark
         const benchmarkHistory = await yahooFinance.chart(benchmarkSymbol, {
@@ -54,35 +54,65 @@ export async function GET(req: any) {
             interval: "1mo",
         });
 
-        const benchmarkQuotes = benchmarkHistory.quotes || [];
+        const benchmarkQuotes = (benchmarkHistory.quotes || []).filter(q => q.adjclose !== undefined);
 
-        // Map months to performance
-        const monthlyReturns = benchmarkQuotes.map((q, i) => {
-            const date = new Date(q.date);
+        // Fetch historical data for all current holdings to estimate monthly returns
+        const holdingsQuotes = await Promise.all(
+            portfolioData.holdings.map(async (h: any) => {
+                try {
+                    const history = await yahooFinance.chart(h.symbol, {
+                        period1: Math.floor(sixMonthsAgo.getTime() / 1000),
+                        interval: "1mo",
+                    });
+                    return { symbol: h.symbol, weight: h.allocation / 100, quotes: history.quotes || [] };
+                } catch (e) {
+                    return { symbol: h.symbol, weight: h.allocation / 100, quotes: [] };
+                }
+            })
+        );
+
+        // Map months to discrete performance
+        const monthlyReturns = [];
+        for (let i = 1; i < benchmarkQuotes.length; i++) {
+            const curr = benchmarkQuotes[i];
+            const prev = benchmarkQuotes[i - 1];
+            if (!curr.adjclose || !prev.adjclose) continue;
+
+            const date = new Date(curr.date);
             const monthLabel = date.toLocaleString('default', { month: 'short' });
 
-            const benchReturn = q.adjclose && benchmarkQuotes[0].adjclose
-                ? ((q.adjclose - benchmarkQuotes[0].adjclose) / benchmarkQuotes[0].adjclose) * 100
-                : 0;
+            // Discrete Benchmark Return
+            const benchReturn = ((curr.adjclose - prev.adjclose) / prev.adjclose) * 100;
 
-            // We simulate the monthly outperformance by applying a fraction of our total alpha
-            const lastQuote = benchmarkQuotes[benchmarkQuotes.length - 1];
-            const firstQuote = benchmarkQuotes[0];
-            const totalBenchReturn = lastQuote?.adjclose && firstQuote?.adjclose
-                ? ((lastQuote.adjclose - firstQuote.adjclose) / firstQuote.adjclose) * 100
-                : 1;
+            // Discrete Portfolio Return (Estimated weighted average of holdings)
+            let portfolioReturn = 0;
+            let totalWeight = 0;
 
-            const alphaFactor = totalReturnPercent / (totalBenchReturn || 1);
-            const portfolioReturn = benchReturn * alphaFactor;
+            holdingsQuotes.forEach(hq => {
+                const hCurr = hq.quotes.find(q => new Date(q.date).getMonth() === date.getMonth() && new Date(q.date).getFullYear() === date.getFullYear());
+                const hPrev = hq.quotes[hq.quotes.indexOf(hCurr!) - 1];
 
-            return {
+                if (hCurr?.adjclose && hPrev?.adjclose) {
+                    const hReturn = ((hCurr.adjclose - hPrev.adjclose) / hPrev.adjclose) * 100;
+                    portfolioReturn += hReturn * hq.weight;
+                    totalWeight += hq.weight;
+                }
+            });
+
+            // Normalize weights if some data is missing
+            if (totalWeight > 0) portfolioReturn = portfolioReturn / totalWeight;
+
+            monthlyReturns.push({
                 month: monthLabel,
                 portfolio: parseFloat(portfolioReturn.toFixed(2)),
                 benchmark: parseFloat(benchReturn.toFixed(2)),
-            };
-        });
+            });
+        }
 
-        const latestBenchReturn = monthlyReturns[monthlyReturns.length - 1]?.benchmark || 0;
+        // Slice to show only last 6 months
+        const finalMonthlyReturns = monthlyReturns.slice(-6);
+
+        const latestBenchReturn = finalMonthlyReturns.reduce((sum, m) => sum + m.benchmark, 0); // Approx YTD-ish
         const alpha = totalReturnPercent - latestBenchReturn;
 
         const summary = {
@@ -96,7 +126,7 @@ export async function GET(req: any) {
 
         return NextResponse.json({
             summary,
-            monthlyReturns,
+            monthlyReturns: finalMonthlyReturns,
         });
     } catch (e: any) {
         console.error("Performance API Error:", e.message);
