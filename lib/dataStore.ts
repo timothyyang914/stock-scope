@@ -1,5 +1,8 @@
 import { supabase } from "./supabase";
 
+// Safety check for build-time or misconfiguration
+const isDbReady = !!supabase;
+
 export interface Transaction {
     id: string;
     date: string;
@@ -36,6 +39,7 @@ const DEFAULT_CASH = 12500.50;
 
 // Transactions
 export async function getTransactions(): Promise<Transaction[]> {
+    if (!isDbReady) return [];
     const { data, error } = await supabase
         .from('transactions')
         .select('*')
@@ -49,6 +53,7 @@ export async function getTransactions(): Promise<Transaction[]> {
 }
 
 export async function addTransaction(newTx: Transaction) {
+    if (!isDbReady) return;
     const { error } = await supabase
         .from('transactions')
         .insert([newTx]);
@@ -60,6 +65,7 @@ export async function addTransaction(newTx: Transaction) {
 }
 
 export async function updateTransaction(updatedTx: Transaction) {
+    if (!isDbReady) return;
     const { error } = await supabase
         .from('transactions')
         .update(updatedTx)
@@ -72,6 +78,7 @@ export async function updateTransaction(updatedTx: Transaction) {
 }
 
 export async function deleteTransaction(id: string) {
+    if (!isDbReady) return;
     const { error } = await supabase
         .from('transactions')
         .delete()
@@ -85,6 +92,7 @@ export async function deleteTransaction(id: string) {
 
 // Cash Balance (Settings)
 export async function getCashBalance(): Promise<number> {
+    if (!isDbReady) return DEFAULT_CASH;
     const { data, error } = await supabase
         .from('settings')
         .select('value')
@@ -101,6 +109,7 @@ export async function getCashBalance(): Promise<number> {
 }
 
 export async function saveCashBalance(balance: number) {
+    if (!isDbReady) return;
     const { error } = await supabase
         .from('settings')
         .upsert({ id: 'portfolio', value: { cashBalance: balance } });
@@ -113,6 +122,7 @@ export async function saveCashBalance(balance: number) {
 
 // Watchlists
 export async function getWatchlists(): Promise<Watchlist[]> {
+    if (!isDbReady) return [];
     const { data: watchlists, error: wlError } = await supabase
         .from('watchlists')
         .select('*');
@@ -138,6 +148,7 @@ export async function getWatchlists(): Promise<Watchlist[]> {
 }
 
 export async function saveWatchlists(watchlists: Watchlist[]) {
+    if (!isDbReady) return;
     for (const wl of watchlists) {
         const { error: wlError } = await supabase.from('watchlists').upsert({ id: wl.id, name: wl.name });
         if (wlError) throw new Error(wlError.message);
@@ -145,7 +156,7 @@ export async function saveWatchlists(watchlists: Watchlist[]) {
         const { error: delError } = await supabase.from('watchlist_items').delete().eq('watchlist_id', wl.id);
         if (delError) throw new Error(delError.message);
 
-        const items = wl.items.map(i => ({ watchlist_id: wl.id, symbol: i.symbol, name: i.name }));
+        const items = wl.items.map((i: WatchlistItem) => ({ watchlist_id: wl.id, symbol: i.symbol, name: i.name }));
         if (items.length > 0) {
             const { error: insError } = await supabase.from('watchlist_items').insert(items);
             if (insError) throw new Error(insError.message);
@@ -154,6 +165,7 @@ export async function saveWatchlists(watchlists: Watchlist[]) {
 }
 
 export async function getWatchlist(id: string = "default"): Promise<WatchlistItem[]> {
+    if (!isDbReady) return [];
     const { data, error } = await supabase
         .from('watchlist_items')
         .select('symbol, name')
@@ -167,6 +179,7 @@ export async function getWatchlist(id: string = "default"): Promise<WatchlistIte
 }
 
 export async function deleteFromWatchlist(symbol: string, listId: string = "default") {
+    if (!isDbReady) return;
     const { error } = await supabase
         .from('watchlist_items')
         .delete()
@@ -180,6 +193,7 @@ export async function deleteFromWatchlist(symbol: string, listId: string = "defa
 }
 
 export async function addToWatchlist(symbol: string, listId: string = "default", name: string = "") {
+    if (!isDbReady) return;
     const { error } = await supabase
         .from('watchlist_items')
         .insert([{ watchlist_id: listId, symbol, name }]);
@@ -191,6 +205,7 @@ export async function addToWatchlist(symbol: string, listId: string = "default",
 }
 
 export async function deleteWatchlist(id: string) {
+    if (!isDbReady) return;
     const { error } = await supabase
         .from('watchlists')
         .delete()
@@ -203,6 +218,7 @@ export async function deleteWatchlist(id: string) {
 }
 
 export async function renameWatchlist(id: string, newName: string) {
+    if (!isDbReady) return;
     const { error } = await supabase
         .from('watchlists')
         .update({ name: newName })
@@ -216,6 +232,7 @@ export async function renameWatchlist(id: string, newName: string) {
 
 export async function createWatchlist(name: string): Promise<Watchlist> {
     const id = name.toLowerCase().replace(/\s+/g, "-") + "-" + Date.now();
+    if (!isDbReady) return { id, name, items: [] };
     const { error } = await supabase
         .from('watchlists')
         .insert([{ id, name }]);
