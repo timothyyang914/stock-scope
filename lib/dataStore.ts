@@ -53,7 +53,10 @@ export async function addTransaction(newTx: Transaction) {
         .from('transactions')
         .insert([newTx]);
 
-    if (error) console.error("Error adding transaction:", error);
+    if (error) {
+        console.error("Error adding transaction:", error);
+        throw new Error(error.message);
+    }
 }
 
 export async function updateTransaction(updatedTx: Transaction) {
@@ -62,7 +65,10 @@ export async function updateTransaction(updatedTx: Transaction) {
         .update(updatedTx)
         .eq('id', updatedTx.id);
 
-    if (error) console.error("Error updating transaction:", error);
+    if (error) {
+        console.error("Error updating transaction:", error);
+        throw new Error(error.message);
+    }
 }
 
 export async function deleteTransaction(id: string) {
@@ -71,7 +77,10 @@ export async function deleteTransaction(id: string) {
         .delete()
         .eq('id', id);
 
-    if (error) console.error("Error deleting transaction:", error);
+    if (error) {
+        console.error("Error deleting transaction:", error);
+        throw new Error(error.message);
+    }
 }
 
 // Cash Balance (Settings)
@@ -96,7 +105,10 @@ export async function saveCashBalance(balance: number) {
         .from('settings')
         .upsert({ id: 'portfolio', value: { cashBalance: balance } });
 
-    if (error) console.error("Error saving cash balance:", error);
+    if (error) {
+        console.error("Error saving cash balance:", error);
+        throw new Error(error.message);
+    }
 }
 
 // Watchlists
@@ -126,16 +138,17 @@ export async function getWatchlists(): Promise<Watchlist[]> {
 }
 
 export async function saveWatchlists(watchlists: Watchlist[]) {
-    // This is more complex because of the relational structure.
-    // For simplicity in this migration, we'll focus on the core functionality.
-    // In a real app, you'd update specific watchlists.
     for (const wl of watchlists) {
-        await supabase.from('watchlists').upsert({ id: wl.id, name: wl.name });
-        // Clear and re-insert items for simplicity (not efficient but works for small lists)
-        await supabase.from('watchlist_items').delete().eq('watchlist_id', wl.id);
+        const { error: wlError } = await supabase.from('watchlists').upsert({ id: wl.id, name: wl.name });
+        if (wlError) throw new Error(wlError.message);
+
+        const { error: delError } = await supabase.from('watchlist_items').delete().eq('watchlist_id', wl.id);
+        if (delError) throw new Error(delError.message);
+
         const items = wl.items.map(i => ({ watchlist_id: wl.id, symbol: i.symbol, name: i.name }));
         if (items.length > 0) {
-            await supabase.from('watchlist_items').insert(items);
+            const { error: insError } = await supabase.from('watchlist_items').insert(items);
+            if (insError) throw new Error(insError.message);
         }
     }
 }
@@ -160,7 +173,10 @@ export async function deleteFromWatchlist(symbol: string, listId: string = "defa
         .eq('watchlist_id', listId)
         .eq('symbol', symbol);
 
-    if (error) console.error("Error deleting from watchlist:", error);
+    if (error) {
+        console.error("Error deleting from watchlist:", error);
+        throw new Error(error.message);
+    }
 }
 
 export async function addToWatchlist(symbol: string, listId: string = "default", name: string = "") {
@@ -168,7 +184,10 @@ export async function addToWatchlist(symbol: string, listId: string = "default",
         .from('watchlist_items')
         .insert([{ watchlist_id: listId, symbol, name }]);
 
-    if (error) console.error("Error adding to watchlist:", error);
+    if (error) {
+        console.error("Error adding to watchlist:", error);
+        throw new Error(error.message);
+    }
 }
 
 export async function deleteWatchlist(id: string) {
@@ -177,7 +196,10 @@ export async function deleteWatchlist(id: string) {
         .delete()
         .eq('id', id);
 
-    if (error) console.error("Error deleting watchlist:", error);
+    if (error) {
+        console.error("Error deleting watchlist:", error);
+        throw new Error(error.message);
+    }
 }
 
 export async function renameWatchlist(id: string, newName: string) {
@@ -186,7 +208,10 @@ export async function renameWatchlist(id: string, newName: string) {
         .update({ name: newName })
         .eq('id', id);
 
-    if (error) console.error("Error renaming watchlist:", error);
+    if (error) {
+        console.error("Error renaming watchlist:", error);
+        throw new Error(error.message);
+    }
 }
 
 export async function createWatchlist(name: string): Promise<Watchlist> {
@@ -195,7 +220,10 @@ export async function createWatchlist(name: string): Promise<Watchlist> {
         .from('watchlists')
         .insert([{ id, name }]);
 
-    if (error) console.error("Error creating watchlist:", error);
+    if (error) {
+        console.error("Error creating watchlist:", error);
+        throw new Error(error.message);
+    }
     return { id, name, items: [] };
 }
 

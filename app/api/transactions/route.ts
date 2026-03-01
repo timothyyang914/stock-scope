@@ -1,8 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
+export const dynamic = "force-dynamic";
 import { getTransactions, updateTransaction, addTransaction, deleteTransaction } from "@/lib/dataStore";
 
 export async function GET() {
+    console.log("GET /api/transactions");
     const transactions = await getTransactions();
+    console.log(`Found ${transactions.length} transactions`);
 
     const summary = {
         totalBought: transactions
@@ -25,9 +28,12 @@ export async function GET() {
 export async function PUT(req: NextRequest) {
     try {
         const updatedTx = await req.json();
+        console.log("PUT /api/transactions", updatedTx);
         await updateTransaction(updatedTx);
+        console.log("Update successful");
         return NextResponse.json({ success: true, transaction: updatedTx });
     } catch (error: any) {
+        console.error("PUT Error:", error.message);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
@@ -35,9 +41,12 @@ export async function PUT(req: NextRequest) {
 export async function POST(req: NextRequest) {
     try {
         const newTx = await req.json();
+        console.log("POST /api/transactions", newTx);
         await addTransaction(newTx);
+        console.log("Add successful");
         return NextResponse.json({ success: true, transaction: newTx });
     } catch (error: any) {
+        console.error("POST Error:", error.message);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
@@ -46,10 +55,13 @@ export async function DELETE(req: NextRequest) {
     try {
         const { searchParams } = new URL(req.url);
         const id = searchParams.get("id");
+        console.log("DELETE /api/transactions", id);
         if (!id) throw new Error("Missing transaction id");
         await deleteTransaction(id);
+        console.log("Delete successful");
         return NextResponse.json({ success: true });
     } catch (error: any) {
+        console.error("DELETE Error:", error.message);
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
 }
