@@ -1,7 +1,7 @@
-import { supabase } from "./supabase";
+import { supabase, isSupabaseConfigured } from "./supabase";
 
 // Safety check for build-time or misconfiguration
-const isDbReady = !!supabase;
+const isDbReady = isSupabaseConfigured;
 
 export interface Transaction {
     id: string;
@@ -141,9 +141,9 @@ export async function getWatchlists(): Promise<Watchlist[]> {
         return [];
     }
 
-    return watchlists.map(wl => ({
+    return watchlists.map((wl: any) => ({
         ...wl,
-        items: items.filter(i => i.watchlist_id === wl.id).map(i => ({ symbol: i.symbol, name: i.name }))
+        items: items.filter((i: any) => i.watchlist_id === wl.id).map((i: any) => ({ symbol: i.symbol, name: i.name }))
     }));
 }
 
